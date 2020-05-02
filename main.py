@@ -13,6 +13,7 @@ def DateEdit():
 
     print("날짜를 수정했습니다.")
 
+
 # 필요한 부분 패턴화하여 매칭
 def PatternMatch(data):
     # [연장01-02  #   /04월분    #   ]2020.04.30만료   #
@@ -53,20 +54,30 @@ def DateTimeConvertPlusConvert(data):
     date2 = datetime.strptime(strDates[1], '%m').date() + relativedelta(months=1)
     date3 = datetime.strptime(strDates[2], '%Y.%m.%d').date() + relativedelta(months=1)
 
+    date3Month = date3.strftime("%Y.%m.%d")[5:7]
+    date3Day = date3.strftime("%Y.%m.%d")[8:]
+    if date3Month == '03' and date3Day == '29':
+        date3 += timedelta(days=1)
+    if date3Month == '03' and date3Day == '28':
+        date3 += timedelta(days=2)
+
     dates = [date1.strftime("%y-%m"), date2.strftime("%m"), date3.strftime("%Y.%m.%d")]
 
     return dates
 
 # 적요 수정
 def BriefEdit():
-    for i in range(1, num_rows, 2):
+    for i in range(1, num_rows):
         data = readSheet.cell_value(i, 10)
+        if data and search('\(CMS\)\[연장', data):
+            dates = DateTimeConvertPlusConvert(data)
+            index = PatternMatch(data)[1]
 
-        dates = DateTimeConvertPlusConvert(data)
-        index = PatternMatch(data)[1]
+            update = data[:index[0]] + dates[0] + data[index[1]:index[2]] + dates[1] + data[index[3]:index[4]] + dates[2] + data[index[5]:]
 
-        update = data[:index[0]] + dates[0] + data[index[1]:index[2]] + dates[1] + data[index[3]:index[4]] + dates[2] + data[index[5]:]
-        writeSheet.write(i, 10, update)
+            writeSheet.write(i, 10, update)
+
+
 
     print("적요를 수정했습니다.")
 
