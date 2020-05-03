@@ -3,19 +3,49 @@ from xlutils.copy import copy
 from re import *
 from datetime import *
 from dateutil.relativedelta import *
+from os import *
+
+# 파일 존재 여부 확인
+def IsFileValid():
+    while True:
+        filePath = input("엑셀파일(.xls)의 경로를 입력하세요. : ")
+        if path.isfile(filePath):
+            return filePath
+        else:
+            print("존재하지않는 파일입니다. 다시 확인해주세요.")
+            continue
+
+# 입력형식이 맞는 유효한 날짜형식인지 확인
+def IsDateValid(inputDate):
+    try:
+        datetime.strptime(inputDate, '%Y.%m.%d')
+        return True
+    except ValueError:
+        print("날짜형식 또는 입력형식이 맞지 않습니다. 다시 입력해주세요.")
+        return False
 
 # 날짜 일괄 변경
 def DateEdit():
-    inputDate = input("날짜(YYYY.MM.DD)를 입력하세요. : ")
+    while True:
+        inputDate = input("날짜(YYYY.MM.DD)를 입력하세요. : ")
+        if IsDateValid(inputDate):
+            for i in range(1, num_rows):
+                writeSheet.write(i, 0, inputDate)
+            print("날짜를 수정했습니다.")
+            break
+        else:
+            continue
 
-    for i in range(1, num_rows):
-        writeSheet.write(i, 0, inputDate)
-
-    print("날짜를 수정했습니다.")
-
+# 공백 없애기
+def DataTrim(data):
+    dataEnd = search('만료', data)
+    index = dataEnd.end()
+    result = data[:index].replace(" ", "") + data[index:]
+    return result
 
 # 필요한 부분 패턴화하여 매칭
 def PatternMatch(data):
+    # (CMS)[연장01-03*(2인)/05월분]2020.05.30만료
     # [연장01-02  #   /04월분    #   ]2020.04.30만료   #
     patOne = search('\[연장\d\d-\d\d', data)
     patTwo = search('/\d\d월분', data)
@@ -69,26 +99,33 @@ def DateTimeConvertPlusConvert(data):
 def BriefEdit():
     for i in range(1, num_rows):
         data = readSheet.cell_value(i, 10)
-        if data and search('\(CMS\)\[연장', data):
-            dates = DateTimeConvertPlusConvert(data)
-            index = PatternMatch(data)[1]
-
-            update = data[:index[0]] + dates[0] + data[index[1]:index[2]] + dates[1] + data[index[3]:index[4]] + dates[2] + data[index[5]:]
-
+        if data and search('\(CMS\)', data):
+            trimedData = DataTrim(data)
+            dates = DateTimeConvertPlusConvert(trimedData)
+            index = PatternMatch(trimedData)[1]
+            tail = index[4] + len(dates[2])
+            update = trimedData[:index[0]] + dates[0] + trimedData[index[1]:index[2]] + dates[1] + trimedData[index[3]:index[4]] + dates[2] + trimedData[tail:]
             writeSheet.write(i, 10, update)
 
-
-
     print("적요를 수정했습니다.")
+
+# 파일 저장 후 엑셀파일 열기
+def SaveFileAndOpen():
+    saveFile = input("저장할 파일명(확장자명 제외)을 입력하세요. : ")
+    saveFile += '.xls'
+    if not path.exists('saved'):
+        makedirs('saved')
+    filePath = str(getcwd()) + "\\saved\\" + saveFile
+    writeWorkBook.save(filePath)
+    print("saved 폴더에 저장되었습니다. 프로그램을 종료하고 파일을 엽니다.")
+    system('start excel.exe "%s"' % (filePath))
 
 
 # ---------------메인함수-------------------
 
-# file = "과제파일.xls"
-inputFile = input("파일명(확장자명 제외)을 입력하세요. : ")
-inputFile += ".xls"
+inputPath = IsFileValid()
 
-readWorkBook = open_workbook(inputFile, formatting_info=True)
+readWorkBook = open_workbook(inputPath, formatting_info=True)
 readSheet = readWorkBook.sheet_by_index(0)
 
 writeWorkBook = copy(readWorkBook)
@@ -102,8 +139,5 @@ DateEdit()
 # 적요 변경
 BriefEdit()
 
-# 파일 저장
-saveFile = input("저장할 파일명(확장자명 제외)을 입력하세요. : ")
-saveFile += '.xls'
-writeWorkBook.save(saveFile)
-print("완료되었습니다. 프로그램을 종료합니다.")
+# 파일 저장 후 열기
+SaveFileAndOpen()
