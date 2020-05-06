@@ -4,6 +4,7 @@ from re import *
 from datetime import *
 from dateutil.relativedelta import *
 from os import *
+from io import *
 
 # 파일 존재 여부 확인
 def IsFileValid():
@@ -16,9 +17,9 @@ def IsFileValid():
             continue
 
 # 입력형식이 맞는 유효한 날짜형식인지 확인
-def IsDateValid(inputDate):
+def IsInputDateValid(date):
     try:
-        datetime.strptime(inputDate, '%Y.%m.%d')
+        datetime.strptime(date, '%Y.%m.%d')
         return True
     except ValueError:
         print("날짜형식 또는 입력형식이 맞지 않습니다. 다시 입력해주세요.")
@@ -28,13 +29,28 @@ def IsDateValid(inputDate):
 def DateEdit():
     while True:
         inputDate = input("날짜(YYYY.MM.DD)를 입력하세요. : ")
-        if IsDateValid(inputDate):
+        if IsInputDateValid(inputDate):
             for i in range(1, num_rows):
-                writeSheet.write(i, 0, inputDate)
+                data = readSheet.cell_value(i, 0)
+                if search('\d\d\d\d.\d\d.\d\d', data):
+                    writeSheet.write(i, 0, inputDate)
             print("날짜를 수정했습니다.")
             break
         else:
             continue
+
+# 적요 데이터  패턴
+def DataPatterns(data):
+    return [search('\[연장\d\d-\d\d', data), search('/\d\d월분', data), search('\]\d\d\d\d.\d\d.\d\d만료', data)]
+
+# 데이터 오류 확인
+def DataErrorCheck(data):
+    if DataPatterns(data)[0] is None or DataPatterns(data)[0] is None or DataPatterns(data)[0] is None:
+        return False
+    elif StringToDatetime(data) is False:
+        return False
+    else:
+        return True
 
 # 공백 없애기
 def DataTrim(data):
@@ -45,11 +61,11 @@ def DataTrim(data):
 
 # 필요한 부분 패턴화하여 매칭
 def PatternMatch(data):
-    # (CMS)[연장01-03*(2인)/05월분]2020.05.30만료
+    # [연장01-03*(2인)/05월분]2020.05.30만료
     # [연장01-02  #   /04월분    #   ]2020.04.30만료   #
-    patOne = search('\[연장\d\d-\d\d', data)
-    patTwo = search('/\d\d월분', data)
-    patThree = search('\]\d\d\d\d.\d\d.\d\d만료', data)
+    patOne = DataPatterns(data)[0]
+    patTwo = DataPatterns(data)[1]
+    patThree = DataPatterns(data)[2]
 
     matched = [patOne.group(), patTwo.group(), patThree.group()]
 
@@ -76,13 +92,25 @@ def StringIndexing(data):
 
     return strDates
 
-
-# 날짜-문자열변환 및 1달 합
-def DateTimeConvertPlusConvert(data):
+# 문자열 -> 날짜 변환
+def StringToDatetime(data):
     strDates = StringIndexing(data)
-    date1 = datetime.strptime(strDates[0], '%y-%m').date() + relativedelta(months=1)
-    date2 = datetime.strptime(strDates[1], '%m').date() + relativedelta(months=1)
-    date3 = datetime.strptime(strDates[2], '%Y.%m.%d').date() + relativedelta(months=1)
+
+    try:
+        date1 = datetime.strptime(strDates[0], '%y-%m')
+        date2 = datetime.strptime(strDates[1], '%m')
+        date3 = datetime.strptime(strDates[2], '%Y.%m.%d')
+
+    except ValueError:
+        return False
+
+    return [date1, date2, date3]
+
+# 날짜 1달 증가 및 문자열 변환
+def Plus1MonthAndToString(data):
+    date1 = StringToDatetime(data)[0].date() + relativedelta(months=1)
+    date2 = StringToDatetime(data)[1].date() + relativedelta(months=1)
+    date3 = StringToDatetime(data)[2].date() + relativedelta(months=1)
 
     date3Month = date3.strftime("%Y.%m.%d")[5:7]
     date3Day = date3.strftime("%Y.%m.%d")[8:]
@@ -95,17 +123,37 @@ def DateTimeConvertPlusConvert(data):
 
     return dates
 
+# 입력 데이터에 오류가 있을 시, 로그 파일 생성
+def LogFile(row):
+    if not path.exists('logs'):
+        makedirs('logs')
+    if not path.isfile(".\\logs\\log.txt"):
+        logFile = open(".\\logs\\log.txt", "w", encoding='utf-8')
+        logFile.write("파일의 데이터를 수정하는 중, 데이터에 오류가 발견되었습니다.\n")
+        logFile.write("다음 부분의 데이터를 다시 확인하고 로그 파일은 삭제하세요.\n")
+        logFile.write("-------------------------------------------------------------------\n")
+        logFile.close()
+    logFile = open(".\\logs\\log.txt", "a", encoding='utf-8')
+    logFile.write(str(row + 1) + '행의 적요 데이터에 문제가 있습니다.\n')
+    logFile.close()
+
 # 적요 수정
 def BriefEdit():
     for i in range(1, num_rows):
         data = readSheet.cell_value(i, 10)
-        if data and search('\(CMS\)', data):
-            trimedData = DataTrim(data)
-            dates = DateTimeConvertPlusConvert(trimedData)
-            index = PatternMatch(trimedData)[1]
-            tail = index[4] + len(dates[2])
-            update = trimedData[:index[0]] + dates[0] + trimedData[index[1]:index[2]] + dates[1] + trimedData[index[3]:index[4]] + dates[2] + trimedData[tail:]
-            writeSheet.write(i, 10, update)
+        pattern = DataPatterns(data)[0]
+        if data and search('\[연장', data):
+            if DataErrorCheck(data):
+                index = pattern.start()
+                front = data[:index]
+                trimedData = DataTrim(data[index:])
+                dates = Plus1MonthAndToString(trimedData)
+                index = PatternMatch(trimedData)[1]
+                tail = index[4] + len(dates[2])
+                update = front + trimedData[:index[0]] + dates[0] + trimedData[index[1]:index[2]] + dates[1] + trimedData[index[3]:index[4]] + dates[2] + trimedData[tail:]
+                writeSheet.write(i, 10, update)
+            else:
+                LogFile(i)
 
     print("적요를 수정했습니다.")
 
@@ -115,10 +163,12 @@ def SaveFileAndOpen():
     saveFile += '.xls'
     if not path.exists('saved'):
         makedirs('saved')
-    filePath = str(getcwd()) + "\\saved\\" + saveFile
+    filePath = ".\\saved\\" + saveFile
+    logPath = ".\\logs\\log.txt"
     writeWorkBook.save(filePath)
-    print("saved 폴더에 저장되었습니다. 프로그램을 종료하고 파일을 엽니다.")
+    print("saved 폴더에 저장되었습니다. 프로그램을 종료하고 엑셀 파일과 로그 파일을 엽니다.")
     system('start excel.exe "%s"' % (filePath))
+    system('start notepad.exe "%s"' % (logPath))
 
 
 # ---------------메인함수-------------------
