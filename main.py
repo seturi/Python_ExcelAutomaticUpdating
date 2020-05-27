@@ -6,6 +6,7 @@ from dateutil.relativedelta import *
 from os import *
 from io import *
 
+
 # 파일 존재 여부 확인
 def IsFileValid():
     while True:
@@ -14,7 +15,7 @@ def IsFileValid():
             return filePath
         else:
             print("존재하지않는 파일입니다. 다시 확인해주세요.")
-            continue
+
 
 # 입력형식이 맞는 유효한 날짜형식인지 확인
 def IsInputDateValid(date):
@@ -24,6 +25,7 @@ def IsInputDateValid(date):
     except ValueError:
         print("날짜형식 또는 입력형식이 맞지 않습니다. 다시 입력해주세요.")
         return False
+
 
 # 날짜 일괄 변경
 def DateEdit():
@@ -36,21 +38,22 @@ def DateEdit():
                     writeSheet.write(i, 0, inputDate)
             print("날짜를 수정했습니다.")
             break
-        else:
-            continue
 
-# 적요 데이터  패턴
+
+# 적요 데이터 패턴
 def DataPatterns(data):
     return [search('\[연장\d\d-\d\d', data), search('/\d\d월분', data), search('\]\d\d\d\d.\d\d.\d\d만료', data)]
 
+
 # 데이터 오류 확인
 def DataErrorCheck(data):
-    if DataPatterns(data)[0] is None or DataPatterns(data)[0] is None or DataPatterns(data)[0] is None:
+    if (DataPatterns(data)[0] is None) or (DataPatterns(data)[1] is None) or (DataPatterns(data)[2] is None):
         return False
     elif StringToDatetime(data) is False:
         return False
     else:
         return True
+
 
 # 공백 없애기
 def DataTrim(data):
@@ -58,6 +61,7 @@ def DataTrim(data):
     index = dataEnd.end()
     result = data[:index].replace(" ", "") + data[index:]
     return result
+
 
 # 필요한 부분 패턴화하여 매칭
 def PatternMatch(data):
@@ -73,24 +77,26 @@ def PatternMatch(data):
     afPat1 = patOne.end()
     bfPat2 = patTwo.start() + 1
     afPat2 = patTwo.end() - 2
-    bfPat3 = patThree.start() +1
+    bfPat3 = patThree.start() + 1
     afPat3 = patThree.end() - 2
 
     index = [bfPat1, afPat1, bfPat2, afPat2, bfPat3, afPat3]
 
     return [matched, index]
 
+
 # 문자열 자르기 함수
 def StringIndexing(data):
     matched = PatternMatch(data)[0]
 
-    date1 = matched[0][3:8]     # YY-MM
-    date2 = matched[1][1:3]     # MM
-    date3 = matched[2][1:11]    # YYYY.MM.DD
+    date1 = matched[0][3:8]  # YY-MM
+    date2 = matched[1][1:3]  # MM
+    date3 = matched[2][1:11]  # YYYY.MM.DD
 
     strDates = [date1, date2, date3]
 
     return strDates
+
 
 # 문자열 -> 날짜 변환
 def StringToDatetime(data):
@@ -105,6 +111,7 @@ def StringToDatetime(data):
         return False
 
     return [date1, date2, date3]
+
 
 # 날짜 1달 증가 및 문자열 변환
 def Plus1MonthAndToString(data):
@@ -123,6 +130,7 @@ def Plus1MonthAndToString(data):
 
     return dates
 
+
 # 입력 데이터에 오류가 있을 시, 로그 파일 생성
 def LogFile(row):
     if not path.exists('logs'):
@@ -130,32 +138,34 @@ def LogFile(row):
     if not path.isfile(".\\logs\\log.txt"):
         logFile = open(".\\logs\\log.txt", "w", encoding='utf-8')
         logFile.write("파일의 데이터를 수정하는 중, 데이터에 오류가 발견되었습니다.\n")
-        logFile.write("다음 부분의 데이터를 다시 확인하고 로그 파일은 삭제하세요.\n")
+        logFile.write("다음 부분의 데이터를 다시 확인하고 이 파일은 삭제하세요.\n")
         logFile.write("-------------------------------------------------------------------\n")
         logFile.close()
     logFile = open(".\\logs\\log.txt", "a", encoding='utf-8')
     logFile.write(str(row + 1) + '행의 적요 데이터에 문제가 있습니다.\n')
     logFile.close()
 
+
 # 적요 수정
 def BriefEdit():
     for i in range(1, num_rows):
         data = readSheet.cell_value(i, 10)
-        pattern = DataPatterns(data)[0]
-        if data and search('\[연장', data):
-            if DataErrorCheck(data):
-                index = pattern.start()
+        if search('\[연장', data) is not None:
+            index = search('\[연장', data).start()
+            trimedData = DataTrim(data[index:])
+            if DataErrorCheck(trimedData):
                 front = data[:index]
-                trimedData = DataTrim(data[index:])
                 dates = Plus1MonthAndToString(trimedData)
                 index = PatternMatch(trimedData)[1]
                 tail = index[4] + len(dates[2])
-                update = front + trimedData[:index[0]] + dates[0] + trimedData[index[1]:index[2]] + dates[1] + trimedData[index[3]:index[4]] + dates[2] + trimedData[tail:]
+                update = front + trimedData[:index[0]] + dates[0] + trimedData[index[1]:index[2]] + dates[1] \
+                         + trimedData[index[3]:index[4]] + dates[2] + trimedData[tail:]
                 writeSheet.write(i, 10, update)
             else:
                 LogFile(i)
 
     print("적요를 수정했습니다.")
+
 
 # 파일 저장 후 엑셀파일 열기
 def SaveFileAndOpen():
@@ -173,6 +183,7 @@ def SaveFileAndOpen():
 
 # ---------------메인함수-------------------
 
+# 파일명 확인
 inputPath = IsFileValid()
 
 readWorkBook = open_workbook(inputPath, formatting_info=True)
